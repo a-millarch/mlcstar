@@ -1,3 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data (never commit raw/interim/processed data)
+data/raw/
+data/interim/
+data/processed/
+data/dl/
+
+# External reference data (keep metadata.csv in version control if useful)
+# data/external/
+
+# Models (large binary files)
+models/
+
+# Reports (generated artifacts)
+reports/
+
+# Logs
+*.log
+logs/
+
+# Azure ML / credentials
+.azureml/
+config.json
+*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

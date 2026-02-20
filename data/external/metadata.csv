@@ -1,0 +1,12 @@
+filename,dt_colname,value_colname,type_colname,ts_offset
+ADTHaendelser,Flyt_ind,Afsnit,,0
+Procedurer,ServiceDatetime,ProcedureCode,,1
+Diagnoser,Noteret_dato,Diagnosekode,,1
+VitaleVaerdier,Registreringstidspunkt,Værdi,,0
+Medicin,Administrationstidspunkt,ATC,Administrationsdosis,0
+Labsvar,Prøvetagningstidspunkt,Resultatværdi,BestOrd,0
+Cases,Operationshændelses_Tidspunkt,SKS_Kode,Operationshændelse,0
+ITAOversigtsrapport,Målingstidspunkt,Værdi,ITAOversigt_Måling,0
+Notater,Redigeringstidspunkt,Note,Notetype,0
+IndUd,Målingstidspunkt,Værdi,Ind,1
+ITARespirator,Målingstidspunkt,Værdi,ITAResp_Måling,0
