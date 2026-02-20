@@ -1,0 +1,131 @@
+# defaults.yaml — mlcstar configuration template
+
+# ============================================================================
+# PROJECT
+# ============================================================================
+project_name: mlcstar
+
+# ============================================================================
+# TARGET VARIABLE
+# ============================================================================
+# TODO: Set the name of the binary outcome column in base_df
+target: OUTCOME  # e.g. 'mortality_30d', 'readmission', 'icu_admission'
+
+# ============================================================================
+# FILE PATHS
+# ============================================================================
+population_file_path: data/processed/population.csv
+base_df_path: data/processed/base_df.pkl
+bin_df_path:  data/processed/bin_df.pkl
+
+# Path prefix for raw parquet files on Azure blob storage
+# TODO: Set the blobstore URI for your Azure datastore
+raw_file_path: ""  # e.g. "abfss://container@account.dfs.core.windows.net/data/"
+
+# ============================================================================
+# DATA COLLECTION
+# ============================================================================
+# TODO: List the raw file names (without extension, without CPMI_ prefix)
+# that should be downloaded and filtered to the study population.
+# Small files (direct population filter download):
+default_load_filenames:
+    - VitaleVaerdier
+    - Labsvar
+
+# Large files (chunked parquet download + population filter):
+large_load_filenames:
+    - Medicin
+    - ADTHaendelser
+
+# ============================================================================
+# CONCEPTS
+# ============================================================================
+# TODO: List the concept names that will be used as model features.
+# Each name must:
+#   1. Have a corresponding filter function registered in collect_filter()
+#   2. Have a corresponding entry in agg_func below
+#   3. Have a corresponding interim file in data/interim/concepts/<name>.pkl
+concepts:
+    - VitaleVaerdier
+    - Labsvar
+    - Medicin
+    - ADTHaendelser
+
+# Aggregation functions per concept for timesteps
+# TODO: Fill in for each concept listed above.
+agg_func:
+  {}
+  # VitaleVaerdier:
+  #   - last
+  # Labsvar:
+  #   - last
+  # Medicin:
+  #   - last
+  # ADTHaendelser:
+  #   - last
+
+# ============================================================================
+# DATASET CONFIGURATION
+# ============================================================================
+dataset:
+  # TODO: Set the patient ID column name in base_df
+  id_col: PID
+
+  # TODO: List numeric static feature columns from base_df
+  num_cols:
+    []
+    # - age
+    # - weight_kg
+
+  # TODO: List categorical static feature columns from base_df
+  cat_cols:
+    []
+    # - sex
+    # - hospital
+
+  # Concept names that are categorical (use given/count aggregation)
+  ts_cat_names:
+    []
+    # - Medicin
+    # - ADTHaendelser
+
+  # Categorical concepts where each cell can have multiple values (multi-label)
+  ts_categorical_multi_label:
+    []
+    # - Medicin
+
+# ============================================================================
+# TEMPORAL BIN GRID
+# ============================================================================
+# Defines the hierarchical time-binning grid for temporal concept aggregation.
+# Format: {end_time: bin_frequency}
+#   - Keys are time endpoints (e.g. '3h', '14D', 'end')
+#   - Values are bin sizes at that resolution
+# TODO: Adjust the grid to match your clinical observation window.
+
+bin_intervals:
+  3h:   5min
+  6h:   10min
+  12h:  15min
+  24h:  30min
+  72h:  1h
+  14D:  6h
+  end:  1D
+
+# Optional: only include these bin frequencies in step-to-time conversion
+# (set to null to include all frequencies)
+bin_freq_include: null
+
+# ============================================================================
+# COHORT SPLITTING
+# ============================================================================
+# TODO: Choose holdout strategy: 'temporal' (split by admission date) or 'random'
+holdout_type: temporal
+holdout_frac: 0.20   # fraction of data used as test set
+
+# ============================================================================
+# FEATURES TO DROP (optional)
+# ============================================================================
+# Remove specific feature values before aggregation.
+# Format: {concept_name: [feature_value_1, feature_value_2]}
+drop_features: {}
