@@ -91,9 +91,11 @@ def create_base_df(cfg, result_path=None):
     merged_df = add_first_contacts(matched, df_ad)
     merged_df = add_first_hospital(merged_df)
 
+    # Add case info
+
     result = add_patient_info(merged_df, population)
     result = add_patient_id(result)
-    result = mask_mortality(result)
+    #result = mask_mortality(result)
     result = final_cleanup(result)
 
     # Add static features

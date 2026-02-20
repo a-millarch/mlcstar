@@ -46,7 +46,7 @@ def proces_raw_concepts(cfg, base=None, reset=False):
         collect_subsets(cfg, base=base)
 
 
-def proces_inhospital_concepts(cfg, reset=False):
+def proces_preoperative_concepts(cfg, reset=False):
     """
     Filter raw concept files to in-hospital records and save as pkl.
 
@@ -138,10 +138,10 @@ if __name__ == '__main__':
         bpi.create_bin_df(cfg)
 
     # Step 3: Filter raw concepts to in-hospital records
-    proces_inhospital_concepts(cfg, reset=False)
+    proces_preoperative_concepts(cfg, reset=False)
 
     # Step 4: Map/bin concepts to temporal grid
     map_data_optimized(cfg)
 
     logger.info("Data preparation pipeline complete.")
-    logger.info("Next step: train EBM models with train_ebm_over_time.py")
+
