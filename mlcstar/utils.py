@@ -123,7 +123,7 @@ def get_cfg(cfg_path="configs/defaults.yaml"):
         return yaml.safe_load(file)
 
 
-cfg = get_cfg()
+#cfg = get_cfg()
 
 
 def count_csv_rows(filename):
