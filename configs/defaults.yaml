@@ -20,7 +20,7 @@ bin_df_path:  data/processed/bin_df.pkl
 
 # Path prefix for raw parquet files on Azure blob storage
 # TODO: Set the blobstore URI for your Azure datastore
-raw_file_path: ""  # e.g. "abfss://container@account.dfs.core.windows.net/data/"
+raw_file_path: https://forskerpln0ybkrdls01.blob.core.windows.net/sp-data/
 
 # ============================================================================
 # DATA COLLECTION
