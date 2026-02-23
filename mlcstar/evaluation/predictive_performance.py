@@ -17,13 +17,12 @@ import matplotlib.pyplot as plt
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
-from mlcstar.utils import cfg, logger, save_figure
+from mlcstar.utils import logger
 from mlcstar.data.datasets import AggregatedDS
 from mlcstar.evaluation.utils import (
     calculate_roc_auc_ci, calculate_average_precision_ci,
     time_to_step, step_to_time,
 )
-from sklearn.metrics import roc_auc_score, average_precision_score
 
 
 @dataclass

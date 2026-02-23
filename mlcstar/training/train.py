@@ -43,7 +43,7 @@ from sklearn.svm import SVC
 from interpret.glassbox import ExplainableBoostingClassifier
 
 from mlcstar.data.datasets import AggregatedDS
-from mlcstar.utils import cfg, get_base_df, get_train_test_split, logger
+from mlcstar.utils import get_cfg, get_base_df, get_train_test_split, logger
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -228,6 +228,7 @@ def main(args):
     # ------------------------------------------------------------------
     # 1. Load base_df and determine holdout split
     # ------------------------------------------------------------------
+    cfg = get_cfg()
     logger.info("Loading base dataframe...")
     base_df_full = get_base_df()
     logger.info(f"Total patients: {len(base_df_full)}")

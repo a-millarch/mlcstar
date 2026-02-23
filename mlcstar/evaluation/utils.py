@@ -1,4 +1,4 @@
-from mlcstar.utils import logger, cfg
+from mlcstar.utils import logger, get_cfg
 import numpy as np
 from scipy import stats
 from sklearn.metrics import roc_auc_score, average_precision_score
@@ -48,11 +48,13 @@ def _get_intervals(bin_intervals, bin_freq_include=None):
     return intervals
 
 
-def _get_intervals_from_cfg():
+def _get_intervals_from_cfg(cfg=None):
     """
     Parse cfg['bin_intervals'] into a list of (start_min, end_min, bin_min) tuples,
     respecting cfg['bin_freq_include'] filter.
     """
+    if cfg is None:
+        cfg = get_cfg()
     return _get_intervals(
         cfg["bin_intervals"],
         cfg.get("bin_freq_include"),

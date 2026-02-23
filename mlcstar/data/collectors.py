@@ -7,7 +7,7 @@ from azure.identity import DefaultAzureCredential
 from azureml.core import Workspace, Datastore, Dataset, Environment
 
 from mlcstar.utils import is_file_present, are_files_present
-from mlcstar.utils import cfg, get_base_df
+from mlcstar.utils import get_cfg, get_base_df
 from mlcstar.utils import logger
 
 
@@ -89,6 +89,8 @@ def chunk_filter_parquet(filename, base=None, chunk_size=4000000):
 
 
 def population_filter_parquet(filename, base=None, blobstore_uri=None):
+    from mlcstar.utils import get_cfg
+    cfg= get_cfg()
     """Download a parquet file and filter to only population patients."""
     if base is None:
         base = get_base_df()

@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import gc
 
-from mlcstar.utils import logger, cfg, get_base_df
+from mlcstar.utils import logger, get_cfg, get_base_df
 from mlcstar.utils import ensure_datetime, is_file_present
 
 from mlcstar.data.mappings import (

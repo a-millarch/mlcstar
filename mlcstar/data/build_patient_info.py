@@ -36,7 +36,7 @@ import pandas as pd
 import numpy as np
 import subprocess
 
-from mlcstar.utils import logger, cfg, get_base_df, create_enumerated_id, is_file_present
+from mlcstar.utils import logger, get_cfg, get_base_df, create_enumerated_id, is_file_present
 from mlcstar.utils import ensure_datetime, count_csv_rows, inches_to_cm, ounces_to_kg
 try:
     from mlcstar.data.collectors import population_filter_parquet
@@ -733,5 +733,6 @@ def mask_mortality(df, method='percentage', min_duration_hours=0.5):
 
 
 if __name__ == "__main__":
+    cfg = get_cfg()
     create_base_df(cfg)
     create_bin_df(cfg)
