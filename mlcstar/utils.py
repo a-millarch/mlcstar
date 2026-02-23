@@ -24,15 +24,30 @@ class ProjectManager:
         >>> logger = pm.setup_logging(print_only=True)
     """
     def __init__(self, workdir=None):
-        self.init_dir = os.getcwd()
-        self.workdir = workdir if workdir else self.init_dir
-        self.project_name = "mlcstar"
 
-        if workdir and os.path.exists(workdir):
-            os.chdir(workdir)
-            print(f"Working directory changed to: {workdir}")
-        elif workdir:
-            print(f"Directory does not exist: {workdir}")
+        self.project_name = "mlcstar"
+        self.init_dir = os.getcwd()
+        self.workdir = self.init_dir
+        self.compute_name = compute_name = self.init_dir.split('clusters/')[1].split('/code')[0]
+        if workdir is not None:
+            self.set_workdir(workdir)
+        else:
+            self.absolute_workdir = self.return_workdir(workdir)
+
+    def return_workdir(self, workdir):
+        return f'/mnt/batch/tasks/shared/LS_root/mounts/clusters/{self.compute_name}/code/Users/{workdir}'
+        
+    def set_workdir(self, workdir): 
+        new_workdir = self.return_workdir(workdir)
+        
+        if os.path.exists(new_workdir):
+            os.chdir(new_workdir)
+            print(f"Working directory changed to: {new_workdir}")
+            self.workdir = new_workdir
+        else:
+            print(f"Directory does not exist: {new_workdir}")
+        return
+        print("No matching compute name found in the current working directory.")
 
     def setup_logging(self, print_only: bool = False):
         """
