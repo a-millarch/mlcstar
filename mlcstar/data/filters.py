@@ -1,26 +1,10 @@
-# filters.py
-"""
-Data filtering functions for mlcstar.
-
-Infrastructure functions (filter_subsets_inhospital, filter_inhospital,
-collect_filter) are domain-agnostic and ready to use.
-
-Concept-specific filter functions are provided as templates.
-Replace the body of each function with logic matching your EHR data schema.
-
-# TODO: ADAPT FOR mlcstar
-# 1. Replace column name strings with your EHR's actual column names.
-# 2. Import only the mappings you actually define in mappings.py.
-# 3. Add/remove concept filter functions to match your cfg["concepts"].
-# 4. Update the collect_filter() dict to map concept names to filter functions.
-"""
-
 import pandas as pd
 import numpy as np
 import gc
 
 from mlcstar.utils import logger, get_cfg, get_base_df
 from mlcstar.utils import ensure_datetime, is_file_present
+from mlcstar.utils import count_csv_rows, inches_to_cm, ounces_to_kg
 
 from mlcstar.data.mappings import (
     VITALS_MAP, BP_TYPES, HEIGHT_WEIGHT_MAP,
@@ -115,163 +99,55 @@ def filter_inhospital(
 # ============================================================================
 # CONCEPT-SPECIFIC FILTER FUNCTIONS (templates — adapt for mlcstar)
 # ============================================================================
-# Each function receives the output of filter_inhospital() for that concept
-# and must return a DataFrame with columns: [PID, FEATURE, VALUE, TIMESTAMP].
-# Optionally include END_TIMESTAMP for interval-type concepts (e.g. ADT).
-
 
 def filter_vitals(vit):
-    """
-    Filter and standardize vital signs data.
-
-    # TODO: ADAPT FOR mlcstar
-    # 1. Rename columns to VALUE, FEATURE, TIMESTAMP.
-    # 2. Apply BP splitting if needed (uses BP_TYPES from mappings).
-    # 3. Map feature names using VITALS_MAP.
-    # 4. Filter to numeric values and known feature names.
-    """
+    # Create a copy to avoid SettingWithCopyWarning
     vit = vit.copy()
 
-    # TODO: rename columns to standard names
-    # Example:
-    # vit.rename(columns={
-    #     'Value': 'VALUE',
-    #     'ParameterName': 'FEATURE',
-    #     'MeasurementTime': 'TIMESTAMP',
-    # }, inplace=True)
+    # Fix temp in fahrenheit first
+    vit.loc[vit.Vital_parametre == 'Temp.', 'Værdi'] = vit["Værdi_Omregnet"]
 
-    # TODO: split combined BP strings (e.g. '120/80') using BP_TYPES
-    # for bt in BP_TYPES:
-    #     mask = vit['FEATURE'] == bt
-    #     ...
+    # rename cols to standard and reduce
+    vit.rename(columns={"Værdi":"VALUE", "Vital_parametre":"FEATURE", "Registreringstidspunkt":"TIMESTAMP"}, inplace=True)
+    vit = vit[["TIMESTAMP","PID", "FEATURE", "VALUE"]]
 
-    # TODO: map feature names using VITALS_MAP
-    # vit['FEATURE'] = vit['FEATURE'].replace(to_replace=VITALS_MAP)
+    # split BP — uses BP_TYPES from mappings
+    for bt in BP_TYPES:
+        mask = vit['FEATURE'] == bt
+        if len(vit.loc[mask])>0:
+            split_values = vit.loc[mask, 'VALUE'].str.split('/', n=1, expand=True)
+            vit.loc[mask, 'FEATURE'] = 'SBP'
+            vit.loc[mask, 'VALUE'] = split_values[0]
+            diastolic_rows = vit[mask].copy()
+            diastolic_rows['FEATURE'] = 'DBP'
+            diastolic_rows['VALUE'] = split_values[1]
+            vit = pd.concat([vit, diastolic_rows], ignore_index=True)
+            vit.loc[vit['FEATURE'].isin(['SBP', 'DBP']), 'VALUE'] = pd.to_numeric(
+                vit.loc[vit['FEATURE'].isin(['SBP', 'DBP']), 'VALUE'],
+                errors='coerce'
+            )
+            vit['VALUE'] = vit['VALUE'].astype(str)
 
-    # TODO: filter to known features and non-null numeric values
-    # vit = vit[vit.FEATURE.isin(list(set(VITALS_MAP.values())))]
+    # Map parameter names — uses VITALS_MAP and HEIGHT_WEIGHT_MAP from mappings
+    vit["FEATURE"] = vit["FEATURE"].replace(to_replace=VITALS_MAP)
+    vit["FEATURE"] = vit["FEATURE"].replace(to_replace=HEIGHT_WEIGHT_MAP)
+    vit.loc[vit.FEATURE == 'HEIGHT', 'VALUE'] = inches_to_cm(vit[vit.FEATURE == 'HEIGHT'].VALUE.astype(float))
+    vit.loc[vit.FEATURE == 'WEIGHT','VALUE'] = ounces_to_kg(vit[vit.FEATURE == 'WEIGHT'].VALUE.astype(float))
+    vit[(vit.FEATURE.isin(list(set(HEIGHT_WEIGHT_MAP.values()))))].to_pickle('data/interim/Height_Weight.pkl')
 
-    vit = vit[["TIMESTAMP", "PID", "FEATURE", "VALUE"]]
+    pattern = r'([<>]\s*)?[-+]?\d*\.\d+|\d+\.?\d*'
+    vit = vit[(vit.FEATURE.isin(list(set(VITALS_MAP.values()))))
+                & (vit.VALUE.notnull())
+               & ((vit['VALUE'].str.contains(pattern, regex=True) ) | (vit['VALUE'].dtype==float))].copy(deep=True)
+
     return vit
 
-
-def filter_labs(lab):
-    """
-    Filter and standardize laboratory result data.
-
-    # TODO: ADAPT FOR mlcstar
-    # 1. Clean numeric strings (remove commas, asterisks, <, > prefixes).
-    # 2. Filter to tests in LABS_FEATURE_MAP.
-    # 3. Rename columns and apply LABS_REVERSE_MAP.
-    """
-    # TODO: clean result string column
-    # lab['ResultValue'] = lab['ResultValue'].str.replace(',', '.')
-    # lab['ResultValue'] = lab['ResultValue'].str.replace('*', '')
-
-    # TODO: filter to relevant tests
-    # include_list = [name for names in LABS_FEATURE_MAP.values() for name in names]
-    # lab = lab[lab['TestName'].isin(include_list)].copy()
-
-    # TODO: rename columns
-    # lab.rename(columns={
-    #     'TestName': 'FEATURE',
-    #     'ResultValue': 'VALUE',
-    #     'SampleTime': 'TIMESTAMP',
-    # }, inplace=True)
-
-    # TODO: apply reverse map and convert to numeric
-    # lab.FEATURE = lab.FEATURE.replace(LABS_REVERSE_MAP)
-    # lab['VALUE'] = pd.to_numeric(lab['VALUE'], errors='coerce')
-    # lab = lab.dropna(subset=['VALUE'])
-
-    logger.info(f"Using {len(lab)} observations of labs")
-    return lab
-
-
-def filter_ita(ita):
-    """
-    Filter and standardize ICU/ward score data.
-
-    # TODO: ADAPT FOR mlcstar (or remove if not applicable)
-    # 1. Rename columns to FEATURE, VALUE, TIMESTAMP.
-    # 2. Map feature names using ICU_MAP.
-    """
-    ita = ita.copy()
-
-    # TODO: rename columns
-    # ita.rename(columns={
-    #     'ScoreName': 'FEATURE',
-    #     'ScoreValue': 'VALUE',
-    #     'MeasurementTime': 'TIMESTAMP',
-    # }, inplace=True)
-
-    # TODO: apply ICU_MAP
-    # ita['FEATURE'] = ita['FEATURE'].replace(to_replace=ICU_MAP)
-
-    return ita
-
-
-def reverse_dict_replace(original_dict, df, atc_level):
-    """Invert a dict and replace ATC codes in df with category names."""
-    inverted_dict = {}
-    for key, value in original_dict.items():
-        if isinstance(value, list):
-            for item in value:
-                inverted_dict[item] = key
-        else:
-            inverted_dict[value] = key
-    df["FEATURE"] = (
-        df[f"ATC{atc_level}"]
-        .replace(inverted_dict)
-        .where(df[f"ATC{atc_level}"].isin(inverted_dict.keys()), np.nan)
-    )
-    logger.info(
-        f">>Medicine: found {len(df[df.FEATURE.notnull()])} administrations "
-        f"of a ATC level {atc_level} drug"
-    )
-    return df
-
-
-def filter_medicin(med):
-    """
-    Filter and standardize medication administration data.
-
-    # TODO: ADAPT FOR mlcstar
-    # 1. Filter to valid administration actions (MEDICATION_ACTION_LIST).
-    # 2. Extract ATC3/ATC4 prefixes and map to category names.
-    # 3. Rename timestamp column to TIMESTAMP.
-    """
-    med = med[med.Handling.isin(MEDICATION_ACTION_LIST)].copy()  # TODO: rename 'Handling' column
-    med["ATC3"] = med.ATC.str[:3]   # TODO: rename 'ATC' column if different
-    med["ATC4"] = med.ATC.str[:4]
-
-    med3 = reverse_dict_replace(ATC_LVL3_MAP, med.copy(deep=True), 3)
-    med4 = reverse_dict_replace(ATC_LVL4_MAP, med.copy(deep=True), 4)
-    med = pd.concat([med3, med4]).drop_duplicates().copy()
-    med = med[med["FEATURE"].notnull()].copy()
-    med["VALUE"] = med["FEATURE"]
-    med["FEATURE"] = "medication"
-
-    # TODO: rename your administration start/end timestamp columns
-    # med.rename(columns={'AdminStart': 'start', 'AdminEnd': 'end'}, inplace=True)
-    med["TIMESTAMP"] = med["start"]
-    logger.info(f"Using {len(med)} observations of medicine")
-    return med
-
-
 def filter_procedures(proc):
-    """
-    Filter and standardize procedure data.
-
-    # TODO: ADAPT FOR mlcstar
-    # 1. Filter to procedure codes in PROCEDURE_INCLUDE_LIST.
-    # 2. Rename columns to VALUE and TIMESTAMP.
-    # 3. Apply PROCEDURE_REVERSE_MAP to map codes to category names.
-    """
-    proc = proc[proc["ProcedureCode"].isin(PROCEDURE_INCLUDE_LIST)].copy()  # TODO: rename column
+    # Uses PROCEDURE_INCLUDE_LIST and PROCEDURE_REVERSE_MAP from mappings
+    proc = proc[proc["ProcedureCode"].isin(PROCEDURE_INCLUDE_LIST)].copy(deep=True)
 
     proc.rename(
-        columns={"ProcedureCode": "VALUE", "ServiceDatetime": "TIMESTAMP"},  # TODO: adapt column names
+        columns={"ProcedureCode": "VALUE", "ServiceDatetime": "TIMESTAMP"},
         inplace=True,
     )
 
@@ -281,39 +157,133 @@ def filter_procedures(proc):
     return proc
 
 
-def filter_adt(adt, base_df=None):
-    """
-    Filter ADT (Admission-Discharge-Transfer) events and classify departments.
+def filter_labs(lab):
+    """Filter by value and by type of lab test.
 
-    # TODO: ADAPT FOR mlcstar
-    # 1. Parse your admit/discharge datetime columns.
-    # 2. Apply classify_department() from mappings (after filling ADT_PATTERNS).
-    # 3. Rename to TIMESTAMP (admit) and END_TIMESTAMP (discharge).
+    Uses LABS_FEATURE_MAP and LABS_REVERSE_MAP from mappings.
+    """
+    lab["Resultatværdi"] = lab["Resultatværdi"].str.replace(",", ".")
+    lab["Resultatværdi"] = lab["Resultatværdi"].str.replace("*", "")
+    pattern = r"([<>]\s*)?[-+]?\d*\.\d+|\d+\.?\d*"
+    lab = lab[lab["Resultatværdi"].notnull()].copy(deep=True)
+    lab = lab[lab["Resultatværdi"].str.contains(pattern, regex=True)].copy(deep=True)
+
+    # Keep relevant features only — uses LABS_FEATURE_MAP from mappings
+    include_list = [name for names in LABS_FEATURE_MAP.values() for name in names]
+    lab = lab[lab["BestOrd"].isin(include_list)].copy(deep=True)
+
+    lab.rename(
+        columns={
+            "BestOrd": "FEATURE",
+            "Resultatværdi": "VALUE",
+            "Prøvetagningstidspunkt": "TIMESTAMP",
+        },
+        inplace=True,
+    )
+
+    lab.VALUE = lab.VALUE.replace({"<": "", ">": ""}, regex=True)
+    lab["VALUE"] = pd.to_numeric(lab["VALUE"], errors="coerce")
+    lab = lab.dropna(subset=["VALUE"])
+    lab.FEATURE = lab.FEATURE.replace(LABS_REVERSE_MAP)
+    logger.info(f"Using {len(lab)} observations of labs")
+    return lab
+
+
+def filter_ita(ita):
+    """Uses ICU_MAP from mappings."""
+    ita = ita.copy()
+    ita.rename(
+        columns={
+            "ITAOversigt_Måling": "FEATURE",
+            "Værdi": "VALUE",
+            "Målingstidspunkt": "TIMESTAMP",
+        },
+        inplace=True,
+    )
+
+    ita["FEATURE"] = ita["FEATURE"].replace(to_replace=ICU_MAP)
+    return ita
+
+
+def reverse_dict_replace(original_dict, df, atc_level):
+    # Invert the dictionary
+    inverted_dict = {}
+    for key, value in original_dict.items():
+        # Ensure value is a list for consistent processing
+        if isinstance(value, list):
+            for item in value:
+                inverted_dict[item] = key
+        else:
+            inverted_dict[value] = key
+    # Replace values in the 'ID' column using the inverted dictionary
+    df["FEATURE"] = (
+        df[f"ATC{atc_level}"]
+        .replace(inverted_dict)
+        .where(df[f"ATC{atc_level}"].isin(inverted_dict.keys()), np.nan)
+    )
+    logger.info(
+        f">>Medicine: found {len(df[df.FEATURE.notnull()])} administrations of a ATC level {atc_level} drug"
+    )
+    return df
+
+
+def filter_medicin(med):
+    """Uses MEDICATION_ACTION_LIST, ATC_LVL3_MAP, ATC_LVL4_MAP from mappings."""
+    med = med[med.Handling.isin(MEDICATION_ACTION_LIST)].copy()
+    med["ATC3"] = med.ATC.str[:3]
+    med["ATC4"] = med.ATC.str[:4]
+
+    med3 = reverse_dict_replace(ATC_LVL3_MAP, med.copy(deep=True), 3)
+    med4 = reverse_dict_replace(ATC_LVL4_MAP, med.copy(deep=True), 4)
+    med = pd.concat([med3, med4]).drop_duplicates().copy()
+    med = med[med["FEATURE"].notnull()].copy()
+    med["VALUE"] = med["FEATURE"]
+    med["FEATURE"] = "medication"
+
+    med.rename(
+        columns={"Administrationstidspunkt": "start", "Seponeringstidspunkt": "end"},
+        inplace=True,
+    )
+    med["TIMESTAMP"] = med["start"]
+    logger.info(f"Using {len(med)} observations of medicine")
+    return med
+
+
+
+
+def filter_adt(adt, base_df=None):
+    """Filter ADT events: classify department types and prepare interval timestamps.
+
+    Uses classify_department() and ADT_PATTERNS from mappings.
 
     Args:
         adt: Raw ADT DataFrame (after filter_inhospital).
-        base_df: Optional base DataFrame for filling missing discharge times.
+        base_df: Optional base DataFrame for filling missing Flyt_ud.
+            If None, loads from disk via get_base_df().
     """
     adt = adt.copy()
 
-    # TODO: rename your admit/discharge datetime columns
-    # adt['Flyt_ind'] = pd.to_datetime(adt['AdmitTime'], errors='coerce')
-    # adt['Flyt_ud'] = pd.to_datetime(adt['DischargeTime'], errors='coerce')
+    adt["Flyt_ind"] = pd.to_datetime(adt["Flyt_ind"], errors="coerce")
+    adt["Flyt_ud"] = pd.to_datetime(adt["Flyt_ud"], errors="coerce")
 
-    # Classify departments
-    adt["VALUE"] = adt["Afsnit"].apply(classify_department)  # TODO: rename 'Afsnit' column
+    # Classify departments using shared classify_department()
+    adt["VALUE"] = adt["Afsnit"].apply(classify_department)
+
     adt["FEATURE"] = "ADT"
 
+    # Drop unrecognized departments
     adt = adt[adt["VALUE"].notna()].copy()
     logger.info(f"ADT: {len(adt)} events after department classification")
 
+    # Sort for forward-fill logic
     adt = adt.sort_values(["PID", "Flyt_ind"]).reset_index(drop=True)
 
-    # Handle missing end times: fill from next event's start
+    # Handle missing Flyt_ud: fill from next event's Flyt_ind per patient
     adt["next_flyt_ind"] = adt.groupby("PID")["Flyt_ind"].shift(-1)
     mask_missing_end = adt["Flyt_ud"].isna()
     adt.loc[mask_missing_end, "Flyt_ud"] = adt.loc[mask_missing_end, "next_flyt_ind"]
 
+    # For remaining NaN (last event per patient), fill from base_df end time
     if mask_missing_end.any() and adt["Flyt_ud"].isna().any():
         if base_df is None:
             base_df = get_base_df()
@@ -322,7 +292,12 @@ def filter_adt(adt, base_df=None):
         adt.loc[still_missing, "Flyt_ud"] = adt.loc[still_missing, "PID"].map(end_map).values
 
     adt = adt.drop(columns=["next_flyt_ind"])
+
+    # Drop any rows still missing end timestamp
+    n_before = len(adt)
     adt = adt.dropna(subset=["Flyt_ud"])
+    if len(adt) < n_before:
+        logger.warning(f"ADT: dropped {n_before - len(adt)} events with missing Flyt_ud")
 
     adt["TIMESTAMP"] = adt["Flyt_ind"]
     adt["END_TIMESTAMP"] = adt["Flyt_ud"]
@@ -344,12 +319,12 @@ def collect_filter(concept: str):
     # Add new filter functions above as needed.
     """
     filter_funcs = {
-        # 'VitaleVaerdier': filter_vitals,
-        # 'Labsvar': filter_labs,
-        # 'ITAOversigtsrapport': filter_ita,
-        # 'Medicin': filter_medicin,
-        # 'Procedurer': filter_procedures,
-        # 'ADTHaendelser': filter_adt,
+        "VitaleVaerdier": filter_vitals,
+        "ITAOversigtsrapport": filter_ita,
+        "Labsvar": filter_labs,
+        "Medicin": filter_medicin,
+        "Procedurer": filter_procedures,
+        "ADTHaendelser": filter_adt,
     }
 
     if concept not in filter_funcs:

@@ -1,37 +1,3 @@
-"""
-build_patient_info.py — Patient cohort construction for mlcstar.
-
-This file provides the infrastructure for building base_df and bin_df.
-
-# ============================================================================
-# ADAPTATION GUIDE
-# ============================================================================
-# Functions marked with "# TODO: ADAPT FOR mlcstar" contain astra/trauma-
-# specific logic that must be replaced with your domain's equivalent.
-#
-# Functions that are domain-agnostic and can be used as-is:
-#   - create_bin_df()
-#   - create_bin_df_with_mortality_masking()
-#   - collapse_admissions()
-#   - _collapse_patient_admissions()
-#   - find_forløb()
-#   - check_overlaps()
-#   - mask_mortality()
-#
-# Functions requiring full adaptation for mlcstar:
-#   - create_base_df()      — orchestrates the full pipeline
-#   - load_or_collect_population()  — your population source
-#   - load_or_collect_adt()         — your admission/discharge data
-#   - build_trajectories()          — your trajectory logic
-#   - add_first_contacts()          — your care pathway logic
-#   - add_first_hospital()          — your site/location logic
-#   - add_patient_info()            — your patient demographics
-#   - add_to_base()                 — your static features & target
-#   - add_elixhauser()              — remove or replace with your comorbidity
-#   - prepare_height_weight()       — replace with your anthropometric source
-# ============================================================================
-"""
-
 import pandas as pd
 import numpy as np
 import subprocess
@@ -322,9 +288,6 @@ def add_to_base(base):
         )
     ).astype(int)
 
-    base = add_height_weight(base)
-
-    # TODO: replace with your target variable definition
     base.loc[
         (pd.to_datetime(base.DOD) - pd.to_datetime(base.start))
         <= pd.Timedelta(days=30),
@@ -341,6 +304,63 @@ def add_to_base(base):
 
 
     return base
+
+
+### Height weight
+
+def prepare_height_weight(base):
+    from mlcstar.data.collectors import population_filter_parquet
+    population_filter_parquet('VitaleVaerdier', base=base)
+    vit_raw = pd.read_pickle("data/raw/VitaleVaerdier.pkl") 
+    hw_map = {"Højde": "HEIGHT", "Vægt": "WEIGHT"}
+    vit_raw.rename(
+        columns={
+            "Værdi": "VALUE",
+            "Vital_parametre": "FEATURE",
+            "Registreringstidspunkt": "TIMESTAMP",
+        },
+        inplace=True,
+    )
+    vit_raw["FEATURE"] = vit_raw["FEATURE"].replace(to_replace=hw_map)
+    vit_raw["VALUE"] = pd.to_numeric(vit_raw["VALUE"], errors="coerce")
+    vit_raw = vit_raw.dropna(subset=["VALUE"])
+    vit_raw.loc[vit_raw.FEATURE == "HEIGHT", "VALUE"] = inches_to_cm(
+        vit_raw[vit_raw.FEATURE == "HEIGHT"].VALUE.astype(float)
+    )
+    vit_raw.loc[vit_raw.FEATURE == "WEIGHT", "VALUE"] = ounces_to_kg(
+        vit_raw[vit_raw.FEATURE == "WEIGHT"].VALUE.astype(float)
+    )
+    hw = vit_raw[(vit_raw.FEATURE.isin(list(set(hw_map.values()))))]
+    assert len(hw)>0
+    hw = hw.merge(base[["PID", "CPR_hash", "start", "end"]], on="CPR_hash", how="left")
+    hw["TIMESTAMP"] = pd.to_datetime(hw.TIMESTAMP)
+    hw = hw[hw.TIMESTAMP <= hw.end]
+    hw = hw.sort_values(["CPR_hash", "TIMESTAMP"], ascending=False).drop_duplicates(
+        subset=["CPR_hash", "FEATURE"], keep="first"
+    )
+    #hw = hw[hw.delta.dt.days < 365 * 2]
+    hw[["TIMESTAMP", "PID", "FEATURE", "VALUE"]].to_pickle(
+        "data/interim/Height_Weight.pkl"
+    )
+
+
+def add_height_weight(base):
+    try: 
+        hw = pd.read_pickle("data/interim/Height_Weight.pkl")
+    except FileNotFoundError:
+        prepare_height_weight(base)
+        hw = pd.read_pickle("data/interim/Height_Weight.pkl")
+        
+    hw_df = hw.sort_values("TIMESTAMP").drop_duplicates(
+        subset=["PID", "FEATURE"], keep="first"
+    )
+    pivot_df = hw_df.pivot(
+        index=["PID"], columns="FEATURE", values="VALUE"
+    ).reset_index()
+    base = base.merge(pivot_df, how="left", on="PID")
+
+    return base
+
 
 
 # ============================================================================
@@ -371,76 +391,6 @@ def add_comorbidity(base, cols_to_add=["ASMT_ELIX"]):
             base["ASMT_ELIX"] = np.nan
             return base
         break
-
-
-# ============================================================================
-# HEIGHT / WEIGHT (OPTIONAL)
-# ============================================================================
-
-def prepare_height_weight(base):
-    """
-    Extract height and weight from vitals.
-
-    # TODO: ADAPT FOR mlcstar
-    # Update column names and file path. Replace Danish column names with
-    # your domain's equivalent.
-    """
-    vit_raw = pd.read_csv("data/raw/VitaleVaerdier.csv", index_col=0)  # TODO: update filename
-    hw_map = {"Højde": "HEIGHT", "Vægt": "WEIGHT"}  # TODO: update feature name mapping
-    vit_raw.rename(
-        columns={
-            "Værdi": "VALUE",
-            "Vital_parametre": "FEATURE",
-            "Registreringstidspunkt": "TIMESTAMP",
-        },
-        inplace=True,
-    )
-    vit_raw["FEATURE"] = vit_raw["FEATURE"].replace(to_replace=hw_map)
-    vit_raw["VALUE"] = pd.to_numeric(vit_raw["VALUE"], errors="coerce")
-    vit_raw = vit_raw.dropna(subset=["VALUE"])
-    # TODO: update unit conversion if your data is already in cm/kg
-    vit_raw.loc[vit_raw.FEATURE == "HEIGHT", "VALUE"] = inches_to_cm(
-        vit_raw[vit_raw.FEATURE == "HEIGHT"].VALUE.astype(float)
-    )
-    vit_raw.loc[vit_raw.FEATURE == "WEIGHT", "VALUE"] = ounces_to_kg(
-        vit_raw[vit_raw.FEATURE == "WEIGHT"].VALUE.astype(float)
-    )
-    hw = vit_raw[(vit_raw.FEATURE.isin(list(set(hw_map.values()))))]
-    assert len(hw) > 0
-    hw = hw.merge(base[["PID", "CPR_hash", "start", "end"]], on="CPR_hash", how="left")
-    hw["TIMESTAMP"] = pd.to_datetime(hw.TIMESTAMP)
-    hw = hw[hw.TIMESTAMP <= hw.end]
-    hw = hw.sort_values(["CPR_hash", "TIMESTAMP"], ascending=False).drop_duplicates(
-        subset=["CPR_hash", "FEATURE"], keep="first"
-    )
-    hw[["TIMESTAMP", "PID", "FEATURE", "VALUE"]].to_pickle("data/interim/Height_Weight.pkl")
-
-
-def add_height_weight(base):
-    """
-    Add height and weight to base_df.
-
-    # TODO: ADAPT FOR mlcstar
-    # Remove or replace if your domain doesn't use anthropometrics.
-    """
-    try:
-        hw = pd.read_pickle("data/interim/Height_Weight.pkl")
-    except FileNotFoundError:
-        try:
-            prepare_height_weight(base)
-            hw = pd.read_pickle("data/interim/Height_Weight.pkl")
-        except Exception:
-            logger.warning("Height/weight not available, filling with NaN")
-            base["HEIGHT"] = np.nan
-            base["WEIGHT"] = np.nan
-            return base
-
-    hw_df = hw.sort_values("TIMESTAMP").drop_duplicates(
-        subset=["PID", "FEATURE"], keep="first"
-    )
-    pivot_df = hw_df.pivot(index=["PID"], columns="FEATURE", values="VALUE").reset_index()
-    base = base.merge(pivot_df, how="left", on="PID")
-    return base
 
 
 # ============================================================================
