@@ -10,24 +10,23 @@ authors = [
   { name = "Andreas Skov Millarch", email = "andreasmillarch@gmail.com" },
 ]
 requires-python = ">=3.9"
-dependencies = [
-  "pandas",
-  "numpy",
-  "scikit-learn",
-  "pyarrow",
-  "interpret",
-  "azureml-core",
-  "azure-ai-ml",
-  "azure-storage-blob",
-  "azure-identity",
-  "mltable",
-  "pyyaml",
-  "rich",
-  "matplotlib",
-  "seaborn",
-  "scipy",
-]
-
+#dependencies = [
+#  "pandas",
+#  "numpy",
+#  "scikit-learn",
+##  "pyarrow",
+#  "interpret",
+#  "azureml-core",
+#  "azure-ai-ml",
+#  "azure-storage-blob",
+#  "azure-identity",
+#  "mltable",
+#  "pyyaml",
+#  "rich",
+#  "matplotlib",
+#  "seaborn",
+#  "scipy",
+#]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["mlcstar*"]

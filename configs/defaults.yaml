@@ -9,7 +9,7 @@ project_name: mlcstar
 # TARGET VARIABLE
 # ============================================================================
 # TODO: Set the name of the binary outcome column in base_df
-target: OUTCOME  # e.g. 'mortality_30d', 'readmission', 'icu_admission'
+target: MORTALITY_90D
 
 # ============================================================================
 # FILE PATHS
@@ -29,13 +29,20 @@ raw_file_path: ""  # e.g. "abfss://container@account.dfs.core.windows.net/data/"
 # that should be downloaded and filtered to the study population.
 # Small files (direct population filter download):
 default_load_filenames:
+    - ADTHaendelser
+    - Diagnoser
+    - Procedurer
     - VitaleVaerdier
-    - Labsvar
+    - Cases
+    - ITAOversigtsrapport
+    - IndUd
+    - ITARespirator
 
 # Large files (chunked parquet download + population filter):
 large_load_filenames:
     - Medicin
-    - ADTHaendelser
+    - Labsvar
+    - Notater
 
 # ============================================================================
 # CONCEPTS
@@ -50,6 +57,9 @@ concepts:
     - Labsvar
     - Medicin
     - ADTHaendelser
+    - Cases
+    - Diagnoser
+    - Procedurer
 
 # Aggregation functions per concept for timesteps
 # TODO: Fill in for each concept listed above.
