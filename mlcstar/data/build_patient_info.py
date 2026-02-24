@@ -361,9 +361,15 @@ def add_to_base(base):
 ### Height weight
 
 def prepare_height_weight(base):
-    from mlcstar.data.collectors import population_filter_parquet
-    population_filter_parquet('VitaleVaerdier', base=base)
-    vit_raw = pd.read_pickle("data/raw/VitaleVaerdier.pkl") 
+
+    path = "data/raw/VitaleVaerdier.pkl"
+    if is_file_present(path):
+        logger.info("Vitalsfile found, loading.")
+    else:
+        from mlcstar.data.collectors import population_filter_parquet
+        population_filter_parquet('VitaleVaerdier', base=base)
+        
+    vit_raw = pd.read_pickle(path) 
     hw_map = {"Højde": "HEIGHT", "Vægt": "WEIGHT"}
     vit_raw.rename(
         columns={
