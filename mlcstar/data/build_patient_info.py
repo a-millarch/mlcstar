@@ -234,7 +234,7 @@ def add_case_knife_time(df, procedures):
     """
     logger.info("Adding knife time from Cases.")
     from mlcstar.data.collectors import population_filter_parquet
-    population_filter_parquet('Cases', base=base)
+    population_filter_parquet('Cases', base=df)
     cases = pd.read_csv("data/raw/Cases.csv", index_col=0, dtype={"CPR_hash": str})
     cases["Operationshændelses_Tidspunkt"] = pd.to_datetime(
         cases["Operationshændelses_Tidspunkt"], errors="coerce"
@@ -269,10 +269,11 @@ def add_case_knife_time(df, procedures):
     matched = (
         candidates.sort_values("_diff")
         .drop_duplicates(subset=["CPR_hash", "ServiceDate"])
-        [["CPR_hash", "ServiceDate", "Case_ID", "knife_time", "knife_time_end", "elapsed_knife_time_minutes"]]
+        
     )
     matched.to_csv('data/processed/ProcedurerCases_merged.csv')
     logger.info(f"Matched knife_time for {len(matched)} of {len(df)} rows.")
+    matched = matched[["CPR_hash", "ServiceDate", "Case_ID", "knife_time", "knife_time_end", "elapsed_knife_time_minutes"]]
     return df.merge(matched, on=["CPR_hash", "ServiceDate"], how="left")
 
 
