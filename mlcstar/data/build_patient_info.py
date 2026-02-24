@@ -370,7 +370,7 @@ def prepare_height_weight(base):
         from mlcstar.data.collectors import population_filter_parquet
         population_filter_parquet('VitaleVaerdier', base=base)
 
-    vit_raw = pd.read_pickle(path) 
+    vit_raw = pd.read_csv(path) 
     hw_map = {"Højde": "HEIGHT", "Vægt": "WEIGHT"}
     vit_raw.rename(
         columns={
