@@ -104,3 +104,34 @@ def population_filter_parquet(filename, base=None, blobstore_uri=None):
     df = df[df.CPR_hash.isin(base.CPR_hash)]
     logger.info(f'loaded {len(df)} rows. Saving file.')
     df.to_csv(f"data/raw/{filename}.csv")
+
+def get_sp_data(file, n_take:int|None=None, filter_function=None):
+    """
+    Fetches parquet data from SP-data Azure Blob Storage, with optional row sampling and filtering.
+
+    Args:
+        file (str): Filename identifier (will be formatted as CPMI_{file}.parquet)
+        n_take (int, optional): Number of rows to retrieve. Defaults to full dataset.
+        filter_function (callable, optional): Function to filter retrieved DataFrame
+
+    Returns:
+        pandas.DataFrame: Processed data from specified file
+
+    Example:
+    # Take 1000 rows from PatientInfo where Sex is Male
+        >>> df = get_sp_data('PatientInfo', n_take=1000)
+        >>> df_filtered = get_sp_data('sales', filter_function=lambda x: x[x['Køn'] == 'Mand'])
+    """
+   
+    path = f'https://forskerpln0ybkrdls01.blob.core.windows.net/sp-data/CPMI_{file}.parquet'
+    ds = Dataset.Tabular.from_parquet_files(path=path)
+    if n_take:
+            df = ds.take(n_take).to_pandas_dataframe()
+    else:
+        df =ds.to_pandas_dataframe()
+        
+    if filter_function is None:
+        pass
+    else:
+        df = filter_function(df)
+    return df

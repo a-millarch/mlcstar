@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import subprocess
 
+from sklearn import base
+
 from mlcstar.utils import logger, get_cfg, get_base_df, create_enumerated_id, is_file_present
 from mlcstar.utils import ensure_datetime, count_csv_rows, inches_to_cm, ounces_to_kg
 try:
@@ -58,6 +60,7 @@ def create_base_df(cfg, result_path=None):
     merged_df = add_first_hospital(merged_df)
 
     # Add case info
+    merged_df = add_case_knife_time(merged_df, population)
 
     result = add_patient_info(merged_df, population)
     result = add_patient_id(result)
@@ -138,16 +141,7 @@ def load_or_collect_adt(population):
 # ============================================================================
 
 def build_trajectories(df_ad):
-    """
-    Build patient trajectories from ADT admission events.
-
-    # TODO: ADAPT FOR mlcstar
-    # Update the ADT_haendelse event type name ("Indlæggelse") to match
-    # your event column. The output of collapse_admissions() is domain-agnostic.
-    """
     logger.info(">Building trajectories")
-
-    # TODO: replace "Indlæggelse" with your admission event type
     df_ad["trajectory"] = (
         df_ad[df_ad["ADT_haendelse"] == "Indlæggelse"]
         .groupby("CPR_hash")
@@ -166,6 +160,7 @@ def build_trajectories(df_ad):
 def match_population_to_trajectories(of, population):
     logger.info("Matching procedures to trajectories.")
     fdf = find_forløb(of, population, "ServiceDate")
+    fdf.to_csv('data/processed/admissions.csv')
     df = pd.merge(
         fdf[["CPR_hash", "trajectory", "ServiceDate"]],
         of,
@@ -225,6 +220,60 @@ def add_first_hospital(df):
     df['FIRST_HOSPITAL'] = df['FIRST_HOSPITAL'].apply(standardize_hospital)
     print(df.FIRST_HOSPITAL.value_counts())
     return df
+
+
+def add_case_knife_time(df, procedures):
+    """
+    Add 'knife_time' from the Cases file — the Knivtid/procedure start timestamp.
+
+    Matches Cases to the population seed (Procedurer) on:
+      - CPR_hash (both sides)
+      - SKS_Kode (Cases) == ProcedureCode (population)
+      - Operationshændelses_Tidspunkt date (Cases) == ServiceDate date (population)
+    filtered to rows where Operationshændelse == "Knivtid/procedure start".
+    """
+    logger.info("Adding knife time from Cases.")
+    from mlcstar.data.collectors import population_filter_parquet
+    population_filter_parquet('Cases', base=base)
+    cases = pd.read_csv("data/raw/Cases.csv", index_col=0, dtype={"CPR_hash": str})
+    cases["Operationshændelses_Tidspunkt"] = pd.to_datetime(
+        cases["Operationshændelses_Tidspunkt"], errors="coerce"
+    )
+
+    knife_start = (
+        cases[(cases.Operationshændelse == "Knivtid/procedure start") & (cases.Status == "Fuldført")]
+        [["CPR_hash", "SKS_Kode", "Case_ID", "Operationshændelses_Tidspunkt"]]
+        .rename(columns={"Operationshændelses_Tidspunkt": "knife_time"})
+    )
+    knife_end = (
+        cases[cases.Operationshændelse == "Sidste sutur/procedure slut"]
+        [["Case_ID", "Operationshændelses_Tidspunkt"]]
+        .rename(columns={"Operationshændelses_Tidspunkt": "knife_time_end"})
+    )
+    knife = knife_start.merge(knife_end, on="Case_ID", how="left")
+    knife["elapsed_knife_time_minutes"] = knife["knife_time_end"] - knife["knife_time"]
+    knife["elapsed_knife_time_minutes"] = knife["elapsed_knife_time_minutes"].dt.total_seconds() / 60
+
+    pop = procedures[["CPR_hash", "ProcedureCode", "ServiceDate"]].copy()
+    pop["ServiceDate"] = pd.to_datetime(pop["ServiceDate"], errors="coerce")
+
+    candidates = knife.merge(
+        pop,
+        left_on=["CPR_hash", ],
+        right_on=["CPR_hash", ],
+        how="inner",
+    )
+    candidates["_diff"] = (candidates["knife_time"] - candidates["ServiceDate"]).abs()
+    candidates = candidates[candidates["_diff"] <= pd.Timedelta(days=1)]
+
+    matched = (
+        candidates.sort_values("_diff")
+        .drop_duplicates(subset=["CPR_hash", "ServiceDate"])
+        [["CPR_hash", "ServiceDate", "Case_ID", "knife_time", "knife_time_end", "elapsed_knife_time_minutes"]]
+    )
+    matched.to_csv('data/processed/ProcedurerCases_merged.csv')
+    logger.info(f"Matched knife_time for {len(matched)} of {len(df)} rows.")
+    return df.merge(matched, on=["CPR_hash", "ServiceDate"], how="left")
 
 
 # ============================================================================
@@ -287,6 +336,8 @@ def add_to_base(base):
             (pd.to_datetime(base["start"]) - pd.to_datetime(base.DOB)).dt.days / 365.25
         )
     ).astype(int)
+
+    base = add_height_weight(base)
 
     base.loc[
         (pd.to_datetime(base.DOD) - pd.to_datetime(base.start))
@@ -368,14 +419,6 @@ def add_height_weight(base):
 # ============================================================================
 
 def add_comorbidity(base, cols_to_add=["ASMT_ELIX"]):
-    """
-    Add Elixhauser comorbidity score.
-
-    # TODO: ADAPT FOR mlcstar
-    # Remove this call from create_base_df() if your domain doesn't use
-    # comorbidity scores. Replace with your comorbidity metric if needed.
-    # Requires data/interim/computed_elix_df.csv to exist.
-    """
     while True:
         try:
             elix = pd.read_csv("data/interim/computed_elix_df.csv", low_memory=False)
