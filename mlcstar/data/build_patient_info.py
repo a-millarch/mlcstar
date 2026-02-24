@@ -50,11 +50,13 @@ def create_base_df(cfg, result_path=None):
     logger.info("Creating base dataframe")
 
     population = load_or_collect_population(cfg)
+    logger.info(f'pop loaded: {population.CPR_hash.nunique()} unique CPR hashes')
     df_ad = load_or_collect_adt(population)
     of = build_trajectories(df_ad)
 
     population = ensure_datetime(population, "ServiceDate")
     matched = match_population_to_trajectories(of, population)
+    logger.info(f'matched: {population.CPR_hash.nunique()} unique CPR hashes')
 
     merged_df = add_first_contacts(matched, df_ad)
     merged_df = add_first_hospital(merged_df)
@@ -65,10 +67,12 @@ def create_base_df(cfg, result_path=None):
     result = add_patient_info(merged_df, population)
     result = add_patient_id(result)
     #result = mask_mortality(result)
+    logger.info(f'before clean: {population.CPR_hash.nunique()} unique CPR hashes')
     result = final_cleanup(result)
-
+    logger.info(f'after clean: {population.CPR_hash.nunique()} unique CPR hashes')
     # Add static features
     result = add_to_base(result)
+    logger.info(f'after static added: {population.CPR_hash.nunique()} unique CPR hashes')
     # Add comorbidity (optional — remove if not applicable)
     result = add_comorbidity(result)
 
@@ -310,7 +314,7 @@ def add_patient_id(df):
 
 def final_cleanup(df):
     logger.info("Cleaning up dataframe.")
-    df = df[df["start"].notnull() & df["end"].notnull()]
+    #df = df[df["start"].notnull() & df["end"].notnull()]
     df = df.drop(columns=["Flyt_ind", "Flyt_ud", "ADT_haendelse"], errors='ignore')
     df = df.drop_duplicates(subset="PID").reset_index(drop=True)
     df = df.drop_duplicates(subset=["CPR_hash", "start", "end"]).reset_index(drop=True)
