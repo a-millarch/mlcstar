@@ -56,7 +56,7 @@ def create_base_df(cfg, result_path=None):
 
     population = ensure_datetime(population, "ServiceDate")
     matched = match_population_to_trajectories(of, population)
-    logger.info(f'matched: {population.CPR_hash.nunique()} unique CPR hashes')
+    logger.info(f'matched: {matched.CPR_hash.nunique()} unique CPR hashes')
 
     merged_df = add_first_contacts(matched, df_ad)
     merged_df = add_first_hospital(merged_df)
@@ -67,12 +67,12 @@ def create_base_df(cfg, result_path=None):
     result = add_patient_info(merged_df, population)
     result = add_patient_id(result)
     #result = mask_mortality(result)
-    logger.info(f'before clean: {population.CPR_hash.nunique()} unique CPR hashes')
+    logger.info(f'before clean: {result.CPR_hash.nunique()} unique CPR hashes')
     result = final_cleanup(result)
-    logger.info(f'after clean: {population.CPR_hash.nunique()} unique CPR hashes')
+    logger.info(f'after clean: {result.CPR_hash.nunique()} unique CPR hashes')
     # Add static features
     result = add_to_base(result)
-    logger.info(f'after static added: {population.CPR_hash.nunique()} unique CPR hashes')
+    logger.info(f'after static added: {result.CPR_hash.nunique()} unique CPR hashes')
     # Add comorbidity (optional — remove if not applicable)
     result = add_comorbidity(result)
 
