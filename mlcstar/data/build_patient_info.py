@@ -391,18 +391,13 @@ def prepare_height_weight(base):
         subset=["CPR_hash", "FEATURE"], keep="first"
     )
     #hw = hw[hw.delta.dt.days < 365 * 2]
-    hw[["TIMESTAMP", "PID", "FEATURE", "VALUE"]].to_pickle(
-        "data/interim/Height_Weight.pkl"
-    )
+    return hw[["TIMESTAMP", "PID", "FEATURE", "VALUE"]]
 
 
 def add_height_weight(base):
-    try: 
-        hw = pd.read_pickle("data/interim/Height_Weight.pkl")
-    except FileNotFoundError:
-        prepare_height_weight(base)
-        hw = pd.read_pickle("data/interim/Height_Weight.pkl")
-        
+
+    hw= prepare_height_weight(base)
+
     hw_df = hw.sort_values("TIMESTAMP").drop_duplicates(
         subset=["PID", "FEATURE"], keep="first"
     )
