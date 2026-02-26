@@ -17,5 +17,4 @@ Intraskema_Haendelser,Tidspunkt,Hændelse,,0
 EWS,Målingstidspunkt,Værdi,EWS_Måling,0
 Mikrobiologi_Del1,Provesvarstidspunkt,Proveresultat,Komponentnavn,0
 Mikrobiologi_Del2,Provesvarstidspunkt,Proveresultat,Komponentnavn,0
-Mikrobiologi_Del3,Provesvarstidspunkt,Proveresultat,Komponentnavn,0
-Mikrobiologi_Del4,Provesvarstidspunkt,Proveresultat,Komponentnavn,0
+Mikrobiologi_Del3,Provesvarsdato,Proveresultat,Organisme,0
