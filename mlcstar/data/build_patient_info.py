@@ -171,6 +171,13 @@ def match_population_to_trajectories(of, population):
         on=["CPR_hash", "trajectory"],
         how="left"
     )
+    # Preserve population patients that had no matching trajectory
+    pop_cols = ["CPR_hash", "ServiceDate"]
+    unmatched = population.merge(df[pop_cols].drop_duplicates(), on=pop_cols, how="left", indicator=True)
+    unmatched = unmatched[unmatched["_merge"] == "left_only"].drop(columns=["_merge"])
+    if len(unmatched) > 0:
+        logger.info(f"  {unmatched.CPR_hash.nunique()} patients had no trajectory match, keeping with NaN trajectory")
+        df = pd.concat([df, unmatched], ignore_index=True)
     return df
 
 
