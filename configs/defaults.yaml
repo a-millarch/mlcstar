@@ -96,13 +96,33 @@ dataset:
 
   # TODO: List numeric static feature columns from base_df
   num_cols:
-    []
-    # - age
+    - AGE
+    - HEIGHT
+    - WEIGHT
+    - ASMT_CHARLSON
     # - weight_kg
 
   # TODO: List categorical static feature columns from base_df
   cat_cols:
-    []
+    - SEX
+    - FIRST_HOSPITAL
+    - CHAR_mi
+    - CHAR_chf
+    - CHAR_pvd
+    - CHAR_cevd
+    - CHAR_dementia
+    - CHAR_cpd
+    - CHAR_rheumd
+    - CHAR_pud
+    - CHAR_mld
+    - CHAR_diab
+    - CHAR_diabwc
+    - CHAR_hp
+    - CHAR_rend
+    - CHAR_canc
+    - CHAR_msld
+    - CHAR_metacanc
+    - CHAR_aids
     # - sex
     # - hospital
 
