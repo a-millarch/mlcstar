@@ -149,15 +149,16 @@ def count_csv_rows(filename):
 
 def get_base_df(base_df_path=None):
     if base_df_path is None:
-        base_df_path = cfg["base_df_path"]
+        base_df_path = get_cfg()["base_df_path"]
     return pd.read_pickle(base_df_path)
 
 
 def get_bin_df(bin_df_path=None):
+    _cfg = get_cfg()
     if bin_df_path is None:
-        bin_df_path = cfg["bin_df_path"]
+        bin_df_path = _cfg["bin_df_path"]
     bin_df = pd.read_pickle(bin_df_path)
-    expected_freqs = set(cfg["bin_intervals"].values())
+    expected_freqs = set(_cfg["bin_intervals"].values())
     actual_freqs = set(bin_df["bin_freq"].unique())
     if expected_freqs != actual_freqs:
         raise ValueError(
