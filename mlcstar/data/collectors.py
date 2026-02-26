@@ -46,12 +46,24 @@ def collect_subsets(cfg, base=None):
         else:
             population_filter_parquet(filename, base=base)
 
-    # For larger files, download parquet first
-    if are_files_present('dl',
+    # Resolve parquet directory: external or local
+    use_external = cfg.get('use_external_dl', False)
+    if use_external:
+        dl_dir = cfg['external_dl_path']
+        logger.info(f'Using external dl directory: {dl_dir}')
+    else:
+        dl_dir = 'data/dl'
+
+    # For larger files, download parquet first (skip if using external)
+    if are_files_present(dl_dir,
                          ['CPMI_' + i for i in cfg['large_load_filenames']],
                          extension='.parquet'):
-        logger.info('parquet files found locally, continue')
+        logger.info('parquet files found, continue')
     else:
+        if use_external:
+            raise FileNotFoundError(
+                f"use_external_dl is true but parquet files not found in {dl_dir}"
+            )
         logger.info('missing local parquet files, downloading')
         download_to_local(cfg['large_load_filenames'])
 
@@ -61,17 +73,17 @@ def collect_subsets(cfg, base=None):
             logger.info(f'{filename} found in raw')
         else:
             logger.info(f'Processing {filename}')
-            chunk_filter_parquet(filename, base=base)
+            chunk_filter_parquet(filename, base=base, dl_dir=dl_dir)
 
 
-def chunk_filter_parquet(filename, base=None, chunk_size=4000000):
+def chunk_filter_parquet(filename, base=None, chunk_size=4000000, dl_dir='data/dl'):
     """Filter a large parquet file to only population patients, chunk by chunk."""
     if base is None:
         base = get_base_df()
         logger.info("Loaded base df")
 
     poplist = base['CPR_hash'].unique()
-    file_path = f'data/dl/CPMI_{filename}.parquet'
+    file_path = os.path.join(dl_dir, f'CPMI_{filename}.parquet')
     output_path = f'data/raw/{filename}.csv'
 
     parquet_file = pq.ParquetFile(file_path)

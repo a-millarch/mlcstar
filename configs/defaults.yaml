@@ -44,6 +44,11 @@ large_load_filenames:
     - Labsvar
     - Notater
 
+# Use parquet files from an external directory instead of downloading from Azure.
+# Set use_external_dl to true and provide the absolute path to the external dl dir.
+use_external_dl: true
+external_dl_path: /mnt/batch/tasks/shared/LS_root/mounts/clusters/amil-l56/code/Users/andreas.skov.millarch/repos/_ASTRA/data/dl
+
 # ============================================================================
 # CONCEPTS
 # ============================================================================
