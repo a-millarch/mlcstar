@@ -171,7 +171,7 @@ def match_population_to_trajectories(of, population):
 
     # Pivot multiple procedures per trajectory into wide columns
     group_key = ["CPR_hash", "trajectory"]
-    proc_cols = [c for c in fdf.columns if c.startswith("Procedure")] + ["ServiceDate", "ServiceDateTime"]
+    proc_cols = [c for c in fdf.columns if c.startswith("Procedure") or c.startswith("Service")]
     fdf = fdf.sort_values(group_key + ["ServiceDate"])
     fdf["_proc_num"] = fdf.groupby(group_key).cumcount() + 1
     max_procs = int(fdf["_proc_num"].max())
