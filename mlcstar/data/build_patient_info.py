@@ -168,18 +168,60 @@ def match_population_to_trajectories(of, population):
     logger.info("Matching procedures to trajectories.")
     fdf = find_forløb(of, population, "ServiceDate")
     fdf.to_csv('data/processed/admissions.csv')
-    df = pd.merge(
-        fdf[["CPR_hash", "trajectory", "ServiceDate"]],
-        of,
-        on=["CPR_hash", "trajectory"],
-        how="left"
+
+    # Pivot multiple procedures per trajectory into wide columns
+    group_key = ["CPR_hash", "trajectory"]
+    proc_cols = [c for c in fdf.columns if c.startswith("Procedure")]
+    fdf = fdf.sort_values(group_key + ["ServiceDate"])
+    fdf["_proc_num"] = fdf.groupby(group_key).cumcount() + 1
+    max_procs = int(fdf["_proc_num"].max())
+    logger.info(f"  Max procedures per trajectory: {max_procs}")
+
+    # Pivot procedure-specific columns wide
+    wide_parts = []
+    for col in proc_cols:
+        pivoted = fdf.pivot_table(
+            index=group_key, columns="_proc_num", values=col, aggfunc="first"
+        )
+        pivoted.columns = [f"{col}_{int(n)}" for n in pivoted.columns]
+        wide_parts.append(pivoted)
+
+    if wide_parts:
+        wide = pd.concat(wide_parts, axis=1).reset_index()
+    else:
+        wide = fdf[group_key].drop_duplicates().reset_index(drop=True)
+
+    # Keep non-procedure columns from first row per group (earliest ServiceDate)
+    non_proc = (
+        fdf.drop(columns=proc_cols + ["_proc_num"])
+        .drop_duplicates(subset=group_key, keep="first")
     )
+
+    df = non_proc.merge(wide, on=group_key, how="left")
+
+    # Merge with trajectory data for start/end
+    df = pd.merge(
+        df, of, on=["CPR_hash", "trajectory"],
+        how="left", suffixes=("", "_traj"),
+    )
+    df = df.drop(columns=[c for c in df.columns if c.endswith("_traj")])
+
     # Preserve population patients that had no matching trajectory
     pop_cols = ["CPR_hash", "ServiceDate"]
-    unmatched = population.merge(df[pop_cols].drop_duplicates(), on=pop_cols, how="left", indicator=True)
+    unmatched = population.merge(
+        df[pop_cols].drop_duplicates(), on=pop_cols,
+        how="left", indicator=True
+    )
     unmatched = unmatched[unmatched["_merge"] == "left_only"].drop(columns=["_merge"])
     if len(unmatched) > 0:
-        logger.info(f"  {unmatched.CPR_hash.nunique()} patients had no trajectory match, keeping with NaN trajectory")
+        # Rename procedure columns to _1 for consistency with wide format
+        for col in proc_cols:
+            if col in unmatched.columns:
+                unmatched = unmatched.rename(columns={col: f"{col}_1"})
+        logger.info(
+            f"  {unmatched.CPR_hash.nunique()} patients had no trajectory match, "
+            "keeping with NaN trajectory"
+        )
         df = pd.concat([df, unmatched], ignore_index=True)
     return df
 
@@ -489,7 +531,7 @@ def _collapse_patient_admissions(group: pd.DataFrame, time_gap_hours: int) -> pd
             "CPR_hash": "first",
             "start": "min",
             "end": "max",
-            "trajectory": lambda x: ",".join(map(str, x)),
+            "trajectory": lambda x: ",".join(sorted(set(str(int(v)) for v in x if pd.notna(v)))),
         })
         .reset_index(drop=True)
     )
