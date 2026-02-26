@@ -164,6 +164,7 @@ bin_freq_include: null
 # ============================================================================
 # TODO: Choose holdout strategy: 'temporal' (split by admission date) or 'random'
 holdout_type: temporal
+holdout_split_date: '2023-01-01'  # for temporal holdout, split by this admission date
 holdout_frac: 0.20   # fraction of data used as test set
 
 # ============================================================================
