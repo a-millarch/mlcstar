@@ -9,7 +9,7 @@ project_name: mlcstar
 # TARGET VARIABLE
 # ============================================================================
 # TODO: Set the name of the binary outcome column in base_df
-target: MORTALITY_90D
+target: DECEASED_90d
 
 # ============================================================================
 # FILE PATHS
@@ -37,6 +37,12 @@ default_load_filenames:
     - ITAOversigtsrapport
     - IndUd
     - ITARespirator
+    - OP_haendelser
+    - OP_risiko
+    - OP_flow
+    - Intraskema_Haendelser
+    - EWS
+    - EKG
 
 # Large files (chunked parquet download + population filter):
 large_load_filenames:
@@ -65,7 +71,7 @@ concepts:
     - Cases
     - Diagnoser
     - Procedurer
-
+ 
 # Aggregation functions per concept for timesteps
 # TODO: Fill in for each concept listed above.
 agg_func:
