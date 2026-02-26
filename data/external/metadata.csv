@@ -10,3 +10,8 @@ ITAOversigtsrapport,Målingstidspunkt,Værdi,ITAOversigt_Måling,0
 Notater,Redigeringstidspunkt,Note,Notetype,0
 IndUd,Målingstidspunkt,Værdi,Ind,1
 ITARespirator,Målingstidspunkt,Værdi,ITAResp_Måling,0
+OP_haendelser,Registreringstidspunkt,Værdi,,0
+OP_risiko,Registreringstidspunkt,Værdi,,0
+OP_flow,Registreringstidspunkt,Værdi,,0
+Intraskema_Haendelser,Tidspunkt,Hændelse,,0
+EWS,Målingstidspunkt,Værdi,EWS_Måling,0
