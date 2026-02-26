@@ -199,10 +199,14 @@ def add_first_contacts(df, df_adt):
 
     first_site = first_site[["CPR_hash", "Flyt_ind", "ServiceDate", "start"]].rename(columns={"Flyt_ind": "first_RH"})
 
-    result = pd.merge(first_afsnit, first_site, on=["CPR_hash", "ServiceDate", "start"], how="left")
-    result = result.rename(columns={"Afsnit": "first_afsnit"})
+    enriched = pd.merge(first_afsnit, first_site, on=["CPR_hash", "ServiceDate", "start"], how="left")
+    enriched = enriched.rename(columns={"Afsnit": "first_afsnit"})
+    enriched["time_to_RH"] = enriched["first_RH"] - enriched["start"]
 
-    result["time_to_RH"] = result["first_RH"] - result["start"]
+    # Left-join back to input df so patients without ADT events are preserved
+    cols_to_add = [c for c in enriched.columns if c not in df.columns or c in ["CPR_hash", "ServiceDate", "start"]]
+    result = df.merge(enriched[cols_to_add], on=["CPR_hash", "ServiceDate", "start"], how="left")
+    logger.info(f"first_contacts: {result.CPR_hash.nunique()} unique CPR hashes ({enriched.CPR_hash.nunique()} had ADT match)")
 
     return result
 
