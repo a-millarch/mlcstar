@@ -67,6 +67,9 @@ def create_base_df(cfg, result_path=None):
     # Add case info
     merged_df = add_case_knife_time(merged_df, population)
 
+    # Add diagnoses
+    merged_df = add_diagnoses(merged_df)
+
     result = add_patient_info(merged_df, population)
     result = add_patient_id(result)
     #result = mask_mortality(result)
@@ -335,6 +338,57 @@ def add_case_knife_time(df, procedures):
     logger.info(f"Matched knife_time for {len(matched)} of {len(df)} rows.")
     matched = matched[["CPR_hash", "ServiceDate", "Case_ID", "knife_time", "knife_time_end", "elapsed_knife_time_minutes"]]
     return df.merge(matched, on=["CPR_hash", "ServiceDate"], how="left")
+
+
+def add_diagnoses(df):
+    """
+    Add relevant diagnosis codes from Diagnoser, pivoted wide.
+
+    Keeps diagnoses where Noteret_dato is within [start - 6 months, end].
+    """
+    logger.info("Adding diagnoses.")
+    from mlcstar.data.collectors import population_filter_parquet
+    population_filter_parquet('Diagnoser', base=df)
+
+    diag = pd.read_csv("data/raw/Diagnoser.csv", index_col=0, dtype={"CPR_hash": str})
+    diag["Noteret_dato"] = pd.to_datetime(diag["Noteret_dato"], errors="coerce")
+
+    inclusion_codes = [
+        "DC220", "DC227", "DC229", "DC221", "DC221A", "DC239",
+        "DC240", "DC240A", "DC240B", "DC240C", "DC240D", "DC240E",
+        "DC248", "DC249", "DC787",
+    ]
+    diag = diag[diag["Diagnosekode"].isin(inclusion_codes)].copy()
+    logger.info(f"  {len(diag)} diagnosis records after inclusion filter.")
+
+    # Merge with df to get time window per patient
+    merged = diag.merge(
+        df[["CPR_hash", "ServiceDate", "start", "end"]],
+        on="CPR_hash",
+        how="inner",
+    )
+    merged = merged[
+        (merged["Noteret_dato"] >= merged["start"] - pd.DateOffset(months=6))
+        & (merged["Noteret_dato"] <= merged["end"])
+    ]
+
+    # Pivot wide: one column per diagnosis per patient
+    group_key = ["CPR_hash", "ServiceDate"]
+    merged = merged.sort_values(group_key + ["Noteret_dato"])
+    merged["_diag_num"] = merged.groupby(group_key).cumcount() + 1
+
+    pivoted = merged.pivot_table(
+        index=group_key, columns="_diag_num",
+        values="Diagnosekode", aggfunc="first",
+    )
+    pivoted.columns = [f"Diagnosekode_{int(n)}" for n in pivoted.columns]
+    pivoted = pivoted.reset_index()
+
+    logger.info(
+        f"  Matched diagnoses for {pivoted.CPR_hash.nunique()} patients, "
+        f"max {pivoted.columns[-1]} per patient."
+    )
+    return df.merge(pivoted, on=group_key, how="left")
 
 
 # ============================================================================
