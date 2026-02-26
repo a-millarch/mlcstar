@@ -535,21 +535,83 @@ def add_height_weight(base):
 # COMORBIDITY (OPTIONAL)
 # ============================================================================
 
-def add_comorbidity(base, cols_to_add=["ASMT_ELIX"]):
+def prepare_comorbidity_df(base):
+    """Create the input CSV for the R comorbidity script.
+
+    Selects diagnoses noted BEFORE the admission/index date that were still
+    active (not resolved) at that time — i.e. pre-existing comorbidities.
+    Strips the leading and trailing character from Diagnosekode for ICD-10.
+    """
+    diag = pd.read_csv("data/raw/Diagnoser.csv")
+    assert len(diag) > 0
+    diag["Noteret_dato"] = pd.to_datetime(diag["Noteret_dato"])
+    diag["Løst_dato"] = pd.to_datetime(diag["Løst_dato"])
+
+    merged_df = base[["CPR_hash", "PID", "AGE", "start", "end"]].merge(
+        diag, on="CPR_hash", how="left"
+    )
+
+    logger.info("Preparing comorbidity df")
+    # Where noted date is before admission AND not solved before admission.
+    e_df = merged_df[
+        (merged_df["Noteret_dato"] <= merged_df["start"] - pd.DateOffset(days=1))
+        & (
+            (merged_df["Løst_dato"].isnull())
+            | (
+                merged_df["Løst_dato"].notnull()
+                & (merged_df["Løst_dato"] >= merged_df["start"] + pd.DateOffset(days=1))
+            )
+        )
+    ]
+
+    # Strip first and last character for ICD-10 conversion
+    e_df = e_df.copy()
+    e_df["Diagnosekode"] = e_df["Diagnosekode"].str.slice(1, -1)
+
+    logger.info(
+        f"Unique PIDs in base: {base.groupby('PID').ngroups}"
+    )
+    logger.info(f"PIDs with prior diagnoses: {e_df.groupby('PID').ngroups}")
+    e_df[["PID", "AGE", "Diagnosekode"]].to_csv("data/interim/pre_comorbidity_df.csv")
+
+
+def create_comorbidity(base):
+    """Ensure pre_comorbidity_df exists, then call the R script."""
+    pre_path = "data/interim/pre_comorbidity_df.csv"
+    if is_file_present(pre_path):
+        logger.info("Comorbidity diagnose df found, continuing")
+    else:
+        logger.info("No comorbidity diagnose file, creating.")
+        prepare_comorbidity_df(base)
+
+    if count_csv_rows(pre_path) > 0:
+        logger.info(">Calling R script to compute comorbidity scores")
+        subprocess.call("Rscript mlcstar/R/comorbidity.r", shell=True)
+        logger.info("R subprocess finished")
+    else:
+        logger.info(">No prior diagnoses, comorbidity scores set to null")
+        output_df = base[["CPR_hash", "PID"]].copy(deep=True)
+        output_df["ASMT_ELIX"] = np.nan
+        output_df["ASMT_CHARLSON"] = np.nan
+        output_df.to_csv("data/interim/computed_comorbidity_df.csv", index=False)
+
+
+def add_comorbidity(base):
+    """Load or create comorbidity scores and merge all columns onto base."""
     while True:
         try:
-            elix = pd.read_csv("data/interim/computed_elix_df.csv", low_memory=False)
-            logger.info("Elixhauser df dataframe found, continuing")
+            comorb = pd.read_csv("data/interim/computed_comorbidity_df.csv", low_memory=False)
+            logger.info("Comorbidity dataframe found, continuing")
             baselen = len(base)
-            elix = elix.rename(columns={'elixscore': 'ASMT_ELIX'})
-            base = base.merge(elix[["PID"] + cols_to_add], how="left", on="PID")
+            cols_to_add = [c for c in comorb.columns if c != "PID"]
+            base = base.merge(comorb[["PID"] + cols_to_add], how="left", on="PID")
             assert baselen - len(base) == 0
-            logger.info("Merged Elix onto base")
+            logger.info(f"Merged {len(cols_to_add)} comorbidity columns onto base")
             return base
         except FileNotFoundError:
-            logger.info("Elixhauser DF missing. Create it or remove this call.")
-            base["ASMT_ELIX"] = np.nan
-            return base
+            logger.info("Comorbidity DF missing, creating.")
+            create_comorbidity(base)
+            continue
         break
 
 
