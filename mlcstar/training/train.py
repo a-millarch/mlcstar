@@ -92,7 +92,7 @@ def build_preprocessor(
     """
     cat_steps: list = [("imputer", SimpleImputer(strategy="most_frequent"))]
     if encode_categoricals:
-        cat_steps.append(("to_str", FunctionTransformer(lambda X: X.astype(str))))
+        cat_steps.append(("to_str", FunctionTransformer(np.ndarray.astype, kw_args={"dtype": str})))
         cat_steps.append(("encoder", OrdinalEncoder(
             handle_unknown="use_encoded_value", unknown_value=-1,
         )))
