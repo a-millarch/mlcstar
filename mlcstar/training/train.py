@@ -38,7 +38,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OrdinalEncoder, StandardScaler
 from sklearn.svm import SVC
 from interpret.glassbox import ExplainableBoostingClassifier
 
@@ -80,18 +80,22 @@ def build_preprocessor(
     categorical_features: list,
     continuous_features: list,
     scale_continuous: bool = False,
+    encode_categoricals: bool = False,
 ) -> ColumnTransformer:
     """
     Build a ColumnTransformer that imputes (and optionally scales) features.
 
-    Categorical features: mode imputation.
+    Categorical features: mode imputation, with optional ordinal encoding
+                          (needed for RF / SVM; EBM handles strings natively).
     Continuous features:  mean imputation, with optional StandardScaler (needed
                           for SVM).
     """
-    cat_steps = [
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
-    ]
+    cat_steps: list = [("imputer", SimpleImputer(strategy="most_frequent"))]
+    if encode_categoricals:
+        cat_steps.append(("to_str", FunctionTransformer(lambda X: X.astype(str))))
+        cat_steps.append(("encoder", OrdinalEncoder(
+            handle_unknown="use_encoded_value", unknown_value=-1,
+        )))
     cont_steps: list = [("imputer", SimpleImputer(strategy="mean"))]
     if scale_continuous:
         cont_steps.append(("scaler", StandardScaler()))
@@ -120,6 +124,7 @@ def run_cv_and_final_train(
     categorical_features: list,
     continuous_features: list,
     scale_continuous: bool = False,
+    encode_categoricals: bool = False,
     n_iter: int = 30,
     n_cv_folds: int = 5,
     random_state: int = 42,
@@ -142,6 +147,8 @@ def run_cv_and_final_train(
     categorical_features  : Column names for categorical features.
     continuous_features   : Column names for continuous features.
     scale_continuous  : Whether to add StandardScaler to continuous pipeline.
+    encode_categoricals : Whether to ordinal-encode categorical features
+                          (needed for RF / SVM; EBM handles strings natively).
     n_iter            : Number of random hyperparameter combinations to try.
     n_cv_folds        : Number of cross-validation folds.
     random_state      : Seed for reproducibility.
@@ -157,7 +164,8 @@ def run_cv_and_final_train(
     logger.info(f"{'=' * 70}")
 
     preprocessor = build_preprocessor(
-        categorical_features, continuous_features, scale_continuous
+        categorical_features, continuous_features, scale_continuous,
+        encode_categoricals,
     )
 
     pipeline = Pipeline([
@@ -313,6 +321,7 @@ def main(args):
             "model": ExplainableBoostingClassifier(random_state=args.random_state),
             "param_grid": EBM_PARAM_GRID,
             "scale_continuous": False,
+            "encode_categoricals": False,  # EBM handles strings natively
             "n_iter": args.ebm_n_iter,
             # Limit CV parallelism to avoid over-subscription with EBM's own
             # internal joblib parallelism.
@@ -325,6 +334,7 @@ def main(args):
             ),
             "param_grid": RF_PARAM_GRID,
             "scale_continuous": False,
+            "encode_categoricals": True,
             "n_iter": args.rf_n_iter,
             "search_n_jobs": -1,
         },
@@ -334,6 +344,7 @@ def main(args):
             "model": SVC(probability=True, random_state=args.random_state),
             "param_grid": SVM_PARAM_GRID,
             "scale_continuous": True,   # SVM requires feature scaling
+            "encode_categoricals": True,
             "n_iter": args.svm_n_iter,
             "search_n_jobs": -1,
         },
@@ -359,6 +370,7 @@ def main(args):
             categorical_features=categorical_features,
             continuous_features=continuous_features,
             scale_continuous=mc["scale_continuous"],
+            encode_categoricals=mc["encode_categoricals"],
             n_iter=mc["n_iter"],
             n_cv_folds=args.n_folds,
             random_state=args.random_state,
