@@ -15,7 +15,7 @@ import os
 import pandas as pd
 import numpy as np
 
-from mlcstar.utils import ProjectManager, cfg, logger
+from mlcstar.utils import ProjectManager, get_cfg, logger
 from mlcstar.utils import is_file_present, are_files_present
 
 from mlcstar.data.collectors import collect_subsets
@@ -136,6 +136,7 @@ def map_data_optimized(cfg):
 if __name__ == '__main__':
     pm = ProjectManager()
     logger = pm.setup_logging(print_only=True)
+    cfg = get_cfg()
 
     # Step 1: Create base_df (cohort construction)
     if is_file_present(cfg['base_df_path']):
