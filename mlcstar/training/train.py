@@ -38,7 +38,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 from sklearn.svm import SVC
 from interpret.glassbox import ExplainableBoostingClassifier
 
@@ -88,7 +88,10 @@ def build_preprocessor(
     Continuous features:  mean imputation, with optional StandardScaler (needed
                           for SVM).
     """
-    cat_steps = [("imputer", SimpleImputer(strategy="most_frequent"))]
+    cat_steps = [
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
+    ]
     cont_steps: list = [("imputer", SimpleImputer(strategy="mean"))]
     if scale_continuous:
         cont_steps.append(("scaler", StandardScaler()))
