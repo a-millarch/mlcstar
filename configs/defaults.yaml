@@ -46,7 +46,7 @@ default_load_filenames:
     - Mikrobiologi_Del1
     - Mikrobiologi_Del2
     - Mikrobiologi_Del3
-    - Mikrobiologi_Del4
+    #- Mikrobiologi_Del4
     - Notater
 
 # Large files (chunked parquet download + population filter):
