@@ -2,9 +2,10 @@
 make_data.py — Data preparation pipeline for mlcstar.
 
 Steps:
-1. Collect raw concept files from Azure (collect_subsets)
-2. Filter raw files to in-hospital records (filter_subsets_inhospital)
-3. Map/bin concepts to temporal grid (map_data_optimized)
+1. Create base_df (cohort construction)
+2. Collect raw concept files from Azure (population filter → data/raw/)
+3. Filter to in-hospital records (start → end → data/inhospital/)
+4. Filter to preoperative records (start → knife_time → data/preoperative/)
 
 Run directly to execute the full pipeline:
     python -m mlcstar.make_data
@@ -19,8 +20,7 @@ from mlcstar.utils import is_file_present, are_files_present
 
 from mlcstar.data.collectors import collect_subsets
 import mlcstar.data.build_patient_info as bpi
-from mlcstar.data.filters import filter_subsets_inhospital
-from mlcstar.data.mapper import map_concept, map_concept_optimized
+from mlcstar.data.filters import filter_subsets_inhospital, filter_subsets_preoperative
 
 
 def proces_raw_concepts(cfg, base=None, reset=False):
@@ -48,24 +48,36 @@ def proces_raw_concepts(cfg, base=None, reset=False):
 
 def proces_inhospital_concepts(cfg, reset=False):
     """
-    Filter raw concept files to in-hospital records and save as pkl.
+    Filter raw concept files to in-hospital records (start → end).
 
-    Reads data/external/metadata.csv for datetime column names and offset info.
-    Saves filtered files to data/interim/concepts/<filename>.pkl.
-
-    Args:
-        cfg: Configuration dictionary.
-        reset: If True, re-filter even if interim files are already present.
+    Saves filtered files to data/inhospital/<filename>.csv.
     """
     subsets_filenames = cfg["default_load_filenames"] + cfg["large_load_filenames"]
     if (
-        are_files_present("data/interim/concepts", subsets_filenames, extension=".pkl")
+        are_files_present("data/inhospital", subsets_filenames, extension=".csv")
         and not reset
     ):
-        logger.info("Interim subsets found, continuing")
+        logger.info("Inhospital subsets found, continuing")
     else:
         logger.info("Filtering subsets to in-hospital records")
         filter_subsets_inhospital(cfg)
+
+
+def proces_preoperative_concepts(cfg, reset=False):
+    """
+    Filter raw concept files to preoperative records (start → knife_time).
+
+    Saves filtered files to data/preoperative/<filename>.csv.
+    """
+    subsets_filenames = cfg["default_load_filenames"] + cfg["large_load_filenames"]
+    if (
+        are_files_present("data/preoperative", subsets_filenames, extension=".csv")
+        and not reset
+    ):
+        logger.info("Preoperative subsets found, continuing")
+    else:
+        logger.info("Filtering subsets to preoperative records")
+        filter_subsets_preoperative(cfg)
 
 
 def map_data(cfg):
@@ -131,17 +143,14 @@ if __name__ == '__main__':
     else:
         base = bpi.create_base_df(cfg)
 
-    # Step 2: Create bin_df (temporal grid)
-  #  if is_file_present(cfg['bin_df_path']):
-  #      logger.info(f"bin_df found at {cfg['bin_df_path']}, skipping creation")
-  #  else:
-  #      bpi.create_bin_df(cfg)
+    # Step 2: Collect raw concepts (population filter)
+    proces_raw_concepts(cfg)
 
-    # Step 3: Filter raw concepts to in-hospital records
-    proces_inhospital_concepts(cfg, reset=False)
+    # Step 3: Filter to in-hospital records → data/inhospital/
+    proces_inhospital_concepts(cfg)
 
-    # Step 4: Map/bin concepts to temporal grid
-    #map_data_optimized(cfg)
+    # Step 4: Filter to preoperative records → data/preoperative/
+    proces_preoperative_concepts(cfg)
 
     logger.info("Data preparation pipeline complete.")
 

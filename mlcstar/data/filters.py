@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import gc
@@ -20,19 +21,9 @@ from mlcstar.data.mappings import (
 # INFRASTRUCTURE FUNCTIONS (domain-agnostic — do not modify)
 # ============================================================================
 
-def filter_subsets_inhospital(cfg, base=None):
-    """
-    Filter all raw concept files to in-hospital records and save to interim.
-
-    Reads metadata from data/external/metadata.csv which must contain:
-        - filename: concept name (matches cfg['default_load_filenames'])
-        - dt_colname: name of the datetime column in that file
-        - ts_offset: number of days offset allowed outside admission window
-
-    Saves filtered files to data/interim/concepts/<filename>.pkl.
-    """
+def _load_metadata(cfg):
+    """Load metadata.csv and validate all configured filenames are present."""
     metadata = pd.read_csv("data/external/metadata.csv")
-
     missing_files = [
         file
         for file in cfg["default_load_filenames"]
@@ -41,16 +32,27 @@ def filter_subsets_inhospital(cfg, base=None):
     assert (
         len(missing_files) == 0
     ), f"{missing_files} are not present in data/external/metadata.csv"
+    return metadata
+
+
+def _filter_subsets(cfg, base, output_dir, end_col="end"):
+    """
+    Generic: filter all raw concept files to a time window and save as CSV.
+
+    Args:
+        cfg: Configuration dictionary.
+        base: Base dataframe with PID, CPR_hash, start, and end_col columns.
+        output_dir: Directory to save filtered CSV files.
+        end_col: Column in base to use as the window upper bound.
+    """
+    metadata = _load_metadata(cfg)
+    os.makedirs(output_dir, exist_ok=True)
 
     df = pd.DataFrame()
-
-    if base is None:
-        base = get_base_df()
-
     for filename in metadata.filename:
         del df
         gc.collect()
-        logger.debug(f"Filtering {filename}")
+        logger.info(f"Filtering {filename} → {output_dir}")
         df = pd.read_csv(f"data/raw/{filename}.csv", low_memory=False, index_col=0)
 
         dt_name = str(
@@ -60,40 +62,80 @@ def filter_subsets_inhospital(cfg, base=None):
             metadata.loc[metadata["filename"] == filename]["ts_offset"].iat[0]
         )
 
-        filtered_df = filter_inhospital(base, df, cfg, dt_name, offset=offset)
-        filtered_df.to_pickle(f"data/interim/concepts/{filename}.pkl")
+        filtered_df = _filter_by_time_window(
+            base, df, dt_name, start_col="start", end_col=end_col, offset=offset
+        )
+        filtered_df.to_csv(f"{output_dir}/{filename}.csv")
 
 
-def filter_inhospital(
-    base: pd.DataFrame, df: pd.DataFrame, cfg, dt_name: str, offset=1
+def filter_subsets_inhospital(cfg, base=None):
+    """
+    Filter all raw concept files to in-hospital records (start → end).
+
+    Saves filtered files to data/inhospital/<filename>.csv.
+    """
+    if base is None:
+        base = get_base_df()
+    _filter_subsets(cfg, base, output_dir="data/inhospital", end_col="end")
+
+
+def filter_subsets_preoperative(cfg, base=None):
+    """
+    Filter all raw concept files to preoperative records (start → knife_time).
+
+    Cutoff fallback: knife_time → ServiceDatetime_1 → ServiceDate.
+    Saves filtered files to data/preoperative/<filename>.csv.
+    """
+    if base is None:
+        base = get_base_df()
+    base = base.copy()
+    base["preop_cutoff"] = (
+        base["knife_time"]
+        .fillna(base.get("ServiceDatetime_1"))
+        .fillna(base["ServiceDate"])
+    )
+    base["preop_cutoff"] = pd.to_datetime(base["preop_cutoff"], errors="coerce")
+    _filter_subsets(cfg, base, output_dir="data/preoperative", end_col="preop_cutoff")
+
+
+def _filter_by_time_window(
+    base: pd.DataFrame, df: pd.DataFrame, dt_name: str,
+    start_col: str = "start", end_col: str = "end", offset: int = 1,
 ) -> pd.DataFrame:
     """
-    Filter a dataframe to records falling within each patient's admission window.
+    Filter a dataframe to records within each patient's time window.
 
     Args:
-        base: Base dataframe with columns [PID, CPR_hash, start, end].
+        base: Base dataframe with columns [PID, CPR_hash, start_col, end_col].
         df: Raw concept dataframe (must contain CPR_hash and dt_name columns).
-        cfg: Configuration dictionary.
         dt_name: Name of the datetime column in df.
-        offset: Days of slack outside admission window (default 1).
+        start_col: Column in base for window start.
+        end_col: Column in base for window end.
+        offset: Days of slack outside the window (default 1).
 
     Returns:
         Filtered dataframe with original columns plus PID.
     """
     colnames = df.columns.to_list()
     df = ensure_datetime(df, dt_name)
-    merged_df = base[["PID", "CPR_hash", "start", "end"]].merge(
-        df, on="CPR_hash", how="left"
-    )
+    merge_cols = list({"PID", "CPR_hash", start_col, end_col})
+    merged_df = base[merge_cols].merge(df, on="CPR_hash", how="left")
 
     filtered_df = merged_df[
-        (merged_df[dt_name] >= merged_df["start"] - pd.DateOffset(days=offset))
-        & (merged_df[dt_name] <= merged_df["end"] + pd.DateOffset(days=offset))
+        (merged_df[dt_name] >= merged_df[start_col] - pd.DateOffset(days=offset))
+        & (merged_df[dt_name] <= merged_df[end_col] + pd.DateOffset(days=offset))
     ]
     filtered_df = filtered_df.drop_duplicates().reset_index(drop=True)
 
     logger.debug(f">Original df len: {len(df)}, new df len: {len(filtered_df)}")
     return filtered_df[colnames + ["PID"]]
+
+
+def filter_inhospital(
+    base: pd.DataFrame, df: pd.DataFrame, cfg, dt_name: str, offset=1
+) -> pd.DataFrame:
+    """Filter a dataframe to records within each patient's admission window."""
+    return _filter_by_time_window(base, df, dt_name, "start", "end", offset)
 
 
 # ============================================================================
