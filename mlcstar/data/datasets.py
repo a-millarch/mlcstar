@@ -166,11 +166,12 @@ class AggregatedDS:
         Optimized: Filter to relevant PIDs BEFORE applying expensive
         concept-specific filters (regex, string ops, etc.).
         """
-        concept_path = f"data/interim/concepts/{concept}.pkl"
+        concepts_dir = self.cfg.get("concepts_path", "data/interim/concepts")
+        concept_path = f"{concepts_dir}/{concept}.pkl"
         try:
             df = pd.read_pickle(concept_path)
         except FileNotFoundError:
-            concept_path = f"data/interim/concepts/{concept}.csv"
+            concept_path = f"{concepts_dir}/{concept}.csv"
             df = pd.read_csv(concept_path, low_memory=False)
 
         # Filter to PIDs in base FIRST (cheap operation)

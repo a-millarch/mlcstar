@@ -63,14 +63,16 @@ external_dl_path: /mnt/batch/tasks/shared/LS_root/mounts/clusters/amil-l56/code/
 #   1. Have a corresponding filter function registered in collect_filter()
 #   2. Have a corresponding entry in agg_func below
 #   3. Have a corresponding interim file in data/interim/concepts/<name>.pkl
+concepts_path: data/preoperative
+
 concepts:
-    - VitaleVaerdier
+   # - VitaleVaerdier
     - Labsvar
     - Medicin
-    - ADTHaendelser
-    - Cases
-    - Diagnoser
-    - Procedurer
+    #- ADTHaendelser
+    #- Cases
+    #- Diagnoser
+    #- Procedurer
  
 # Aggregation functions per concept for timesteps
 # TODO: Fill in for each concept listed above.
