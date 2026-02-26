@@ -56,6 +56,9 @@ def create_base_df(cfg, result_path=None):
 
     population = ensure_datetime(population, "ServiceDate")
     matched = match_population_to_trajectories(of, population)
+    # For patients without a trajectory, fall back to ServiceDate for start/end
+    matched["start"] = matched["start"].fillna(matched["ServiceDate"])
+    matched["end"] = matched["end"].fillna(matched["ServiceDate"])
     logger.info(f'matched: {matched.CPR_hash.nunique()} unique CPR hashes')
 
     merged_df = add_first_contacts(matched, df_ad)
@@ -351,7 +354,7 @@ def add_to_base(base):
         np.floor(
             (pd.to_datetime(base["start"]) - pd.to_datetime(base.DOB)).dt.days / 365.25
         )
-    ).astype(int)
+    ).astype("Int64")
 
     base = add_height_weight(base)
 
