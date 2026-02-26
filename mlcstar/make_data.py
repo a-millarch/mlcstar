@@ -29,6 +29,7 @@ def proces_raw_concepts(cfg, base=None, reset=False):
 
     Covers both default_load_filenames (small, direct download) and
     large_load_filenames (chunked download + filter).
+    Only collects files that are missing (collect_subsets checks per-file).
 
     Args:
         cfg: Configuration dictionary.
@@ -42,7 +43,8 @@ def proces_raw_concepts(cfg, base=None, reset=False):
     ):
         logger.info("All raw subsets found, continuing")
     else:
-        logger.info("Raw subsets missing, collecting")
+        missing = [f for f in subsets_filenames if not is_file_present(f"data/raw/{f}.csv")]
+        logger.info(f"Raw subsets missing ({len(missing)}): {missing}")
         collect_subsets(cfg, base=base)
 
 
@@ -50,6 +52,7 @@ def proces_inhospital_concepts(cfg, reset=False):
     """
     Filter raw concept files to in-hospital records (start → end).
 
+    Only filters files that are missing; existing files are skipped.
     Saves filtered files to data/inhospital/<filename>.csv.
     """
     subsets_filenames = cfg["default_load_filenames"] + cfg["large_load_filenames"]
@@ -57,9 +60,10 @@ def proces_inhospital_concepts(cfg, reset=False):
         are_files_present("data/inhospital", subsets_filenames, extension=".csv")
         and not reset
     ):
-        logger.info("Inhospital subsets found, continuing")
+        logger.info("All inhospital subsets found, continuing")
     else:
-        logger.info("Filtering subsets to in-hospital records")
+        missing = [f for f in subsets_filenames if not is_file_present(f"data/inhospital/{f}.csv")]
+        logger.info(f"Inhospital subsets missing ({len(missing)}): {missing}")
         filter_subsets_inhospital(cfg)
 
 
@@ -67,6 +71,7 @@ def proces_preoperative_concepts(cfg, reset=False):
     """
     Filter raw concept files to preoperative records (start → knife_time).
 
+    Only filters files that are missing; existing files are skipped.
     Saves filtered files to data/preoperative/<filename>.csv.
     """
     subsets_filenames = cfg["default_load_filenames"] + cfg["large_load_filenames"]
@@ -74,9 +79,10 @@ def proces_preoperative_concepts(cfg, reset=False):
         are_files_present("data/preoperative", subsets_filenames, extension=".csv")
         and not reset
     ):
-        logger.info("Preoperative subsets found, continuing")
+        logger.info("All preoperative subsets found, continuing")
     else:
-        logger.info("Filtering subsets to preoperative records")
+        missing = [f for f in subsets_filenames if not is_file_present(f"data/preoperative/{f}.csv")]
+        logger.info(f"Preoperative subsets missing ({len(missing)}): {missing}")
         filter_subsets_preoperative(cfg)
 
 

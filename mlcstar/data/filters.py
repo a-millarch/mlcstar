@@ -37,7 +37,9 @@ def _load_metadata(cfg):
 
 def _filter_subsets(cfg, base, output_dir, end_col="end"):
     """
-    Generic: filter all raw concept files to a time window and save as CSV.
+    Generic: filter raw concept files to a time window and save as CSV.
+
+    Skips files that already exist in output_dir.
 
     Args:
         cfg: Configuration dictionary.
@@ -50,6 +52,11 @@ def _filter_subsets(cfg, base, output_dir, end_col="end"):
 
     df = pd.DataFrame()
     for filename in metadata.filename:
+        output_path = f"{output_dir}/{filename}.csv"
+        if is_file_present(output_path):
+            logger.info(f"{filename} already in {output_dir}, skipping")
+            continue
+
         del df
         gc.collect()
         logger.info(f"Filtering {filename} → {output_dir}")
@@ -65,7 +72,7 @@ def _filter_subsets(cfg, base, output_dir, end_col="end"):
         filtered_df = _filter_by_time_window(
             base, df, dt_name, start_col="start", end_col=end_col, offset=offset
         )
-        filtered_df.to_csv(f"{output_dir}/{filename}.csv")
+        filtered_df.to_csv(output_path)
 
 
 def filter_subsets_inhospital(cfg, base=None):
